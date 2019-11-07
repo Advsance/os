@@ -1,79 +1,80 @@
-#pragma once
-#include <iostream>
-#include <stdio.h>
+#include<iostream>
 #include <string>
-#include <cassert>
-#include <string.h>
-#include <netinet/in.h>
 #include <unistd.h>
-#include <sys/socket.h>
-#include <stdlib.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/types.h>
 #include <sys/socket.h>
-typedef struct sockaddr sockaddr;
-typedef struct sockaddr_in sockaddr_in;
+#define CHECK_RET(q) if((q)==false){return -1;}
+
 using namespace std;
-class  UdpSocket{
-  public:
-    UdpSocket()
-      :_fd(-1)
+
+
+class UdpSocket{
+ private: 
+    int _sockfd;
+ public:
+    bool Socket()
     {
-      _fd = socket(AF_INET,SOCK_DGRAM,0);
-      if(_fd<0)
+     _sockfd = socket(AF_INET,SOCK_DGRAM,IPPROTO_UDP);
+     if(_sockfd < 0)
      {
-       cout<<"Create a Failure"<<endl;
+       cerr<<"socket error\n";
+       return false ;
      }
-    }      
-    bool Close(){
-      close(_fd);
-      return true ;
+       return true ;
     }
-    bool Bind(const string& ip,uint16_t port){
-     sockaddr_in addr;
-     addr.sin_family=AF_INET;
-     addr.sin_addr.s_addr=inet_addr(ip.c_str());
-     addr.sin_port=port;
-    int ret = bind(_fd,(sockaddr*)&addr,sizeof(addr));
-    cout<<"bind succeed"<<endl;
-    if(ret<0)
+    
+    bool Bind(const string& ip ,const uint16_t port)
     {
-      perror("bind");
-      return false;
-    }
-    return true;
-    }
-    bool RecvFrom(string& buf,string& ip , uint16_t& port){
-    char temp[1024*10]={0};
-    sockaddr_in peer;
-    socklen_t len=sizeof(peer);
-    int ret = recvfrom(_fd,temp,sizeof(temp)-1,0,(sockaddr*)& peer ,&len);
-    if(ret<0)
-    {
-      perror("recvfrom");
-      return false;
-    }
-      ip =inet_ntoa(peer.sin_addr);   
-      port=ntohs(peer.sin_port);
-    buf.assign(temp,ret);
-    return true;
-    }
-    bool sendTo(const string& buf ,const string& ip,uint16_t port)
-    {
-       sockaddr_in addr;
-       addr.sin_family = AF_INET;
-       addr.sin_port = htons(port);
-       addr.sin_addr.s_addr = inet_addr(ip.c_str());
-       ssize_t write_size=sendto(_fd,buf.data(),buf.size(),
-                 0,(sockaddr*)&addr,sizeof(addr));
-      if(write_size<0)
-      {
-        perror("sendto");
-        return false;
-      }
+      struct sockaddr_in addr;
+      addr.sin_family=AF_INET; // 用的什么类型的IP
+      addr.sin_port = htons(port);
+      addr.sin_addr.s_addr = inet_addr(ip.c_str());
+      int len = sizeof(addr);
+      int ret = bind(_sockfd, (sockaddr*)&addr, len);
+       if(ret < 0)
+       {
+          cerr<<"Bind error"<<endl; 
+          return false ;
+       }
        return true;
     }
-  private:
-    int _fd;
- };
+    // 发送数据
+    bool Send(const string& data ,const string& ip,const u_int16_t& port)
+    {
+      sockaddr_in addr;
+      addr.sin_port = htons(port);
+      addr.sin_family = AF_INET;
+      addr.sin_addr.s_addr = inet_addr(ip.c_str());
+      int ret = sendto(_sockfd, &data[0], data.size(), 0,(sockaddr*)&addr,sizeof(addr));
+      if(ret < 0)
+      {
+        cerr<<"Send error"<<endl;
+        return false;
+      }
+      return true;
+    }
+
+  bool Recv(string& buf,string& ip, uint16_t& port)
+  {
+    sockaddr_in temp_addr;
+    char temp[4096] = {0};
+    socklen_t len = sizeof(temp_addr); //  注意 socklen_t 这个数据类型不能写错
+    int  ret = recvfrom(_sockfd, temp, 4095, 0, (sockaddr*)&temp_addr, &len);
+    if(ret < 0)
+    {
+      cerr<<"recvfrom erro"<<endl;
+      return false;
+    }
+     ip = inet_ntoa(temp_addr.sin_addr);
+     port = ntohs(temp_addr.sin_port);
+     buf.assign(temp,ret);
+     return true;
+  }
+
+  void Close()
+  {
+    close(_sockfd);
+  }
+
+};
